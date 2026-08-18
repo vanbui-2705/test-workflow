@@ -1,0 +1,20 @@
+{
+  "name": "test-workflow",
+  "version": "1.0.0",
+  "description": "Shared test workflow for Python + JS/TS projects — auto-detect stack, fail-fast pipeline (lint → unit → integration → e2e).",
+  "bin": {
+    "test-workflow": "bin/test-workflow.js"
+  },
+  "files": [
+    "bin",
+    "run-tests.sh",
+    "pre-commit",
+    "github-actions",
+    "Makefile",
+    "README.md"
+  ],
+  "keywords": ["test", "workflow", "pytest", "vitest", "lint", "ci", "python", "javascript"],
+  "repository": "github:vanbui-2705/test-workflow",
+  "homepage": "https://github.com/vanbui-2705/test-workflow",
+  "license": "MIT"
+}

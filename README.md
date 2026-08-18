@@ -39,11 +39,41 @@ Ví dụ:
 
 ---
 
+## 🌐 0. Cài đặt workflow (chỉ 1 lần)
+
+Workflow được publish lên npm — user chỉ cần 1 lệnh là xài được trên mọi dự án:
+
+```bash
+npx test-workflow                 # chạy full pipeline (không cần cài)
+# hoặc cài global để dùng lệnh `test-workflow` ở mọi nơi:
+npm i -g test-workflow
+test-workflow fast                # sau khi cài global
+```
+
+Hoặc clone repo về máy (để có cả `run-tests.sh`, `pre-commit`, CI):
+```bash
+git clone https://github.com/vanbui-2705/test-workflow ~/test-workflow
+```
+
+> `npx test-workflow` = CLI Node cross-platform (bin/test-workflow.js) — chạy được
+> trên Windows/macOS/Linux miễn có Node. Không cần `make`.
+
 ## 🚀 2. Vào mỗi dự án, tôi phải làm gì?
 
 Có 3 cấp độ — từ nhẹ đến đầy đủ. Anh chọn tùy nhu cầu.
 
 ### Cấp độ A — CHỈ CHẠY TEST (nhanh nhất, không cài gì)
+Đứng ở thư mục dự án, gọi workflow từ xa bằng `npx`:
+```bash
+cd ~/source/repos/my-bot
+npx test-workflow fast      # lint + unit
+npx test-workflow           # full: lint+unit+integ+e2e
+```
+Hoặc nếu đã clone repo local:
+```bash
+bash ~/test-workflow/run-tests.sh fast
+bash ~/test-workflow/run-tests.sh
+```
 Không cần copy file vào dự án. Đứng ở thư mục dự án, gọi workflow từ xa:
 
 ```bash
