@@ -1,26 +1,11 @@
 #!/usr/bin/env bash
 # ============================================================
-#  pre-commit hook (local) — fast feedback before each commit
-#  Install: copy to <project>/.git/hooks/pre-commit and chmod +x
-#  Runs: lint + unit only (fast tier).
+#  pre-commit hook (local) — monorepo-aware, fast tier only
+#  Install: copy to <project>/.git/hooks/pre-commit && chmod +x
+#  Runs lint + unit on every discovered py/js sub-project.
 # ============================================================
-set -euo pipefail
+set -uo pipefail
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
-
-echo "⚡ pre-commit: running fast test tier..."
-
-IS_PY=no; IS_JS=no
-[ -f pyproject.toml ] || [ -f requirements.txt ] || compgen -G "*.py" >/dev/null 2>&1 && IS_PY=yes
-[ -f package.json ] && IS_JS=yes
-
-if [ "$IS_PY" = yes ]; then
-  command -v ruff >/dev/null && ruff check . || true
-  command -v pytest >/dev/null && { [ -d tests ] && pytest -q tests/ || pytest -q .; } || true
-fi
-if [ "$IS_JS" = yes ]; then
-  npm run lint --if-present 2>/dev/null || true
-  npm run test:unit --if-present 2>/dev/null || npm test --if-present 2>/dev/null || true
-fi
-
-echo "✅ pre-commit checks done"
+echo "⚡ pre-commit: running fast test tier (monorepo-aware)..."
+bash "$HOME/test-workflow/run-tests.sh" fast
