@@ -19,7 +19,18 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-const MODE = (process.argv[2] || 'full').replace(/^--mode=/, '');
+const rawArg = process.argv[2] || 'full';
+if (rawArg === '--help' || rawArg === '-h' || rawArg === 'help') {
+  console.log(`test-workflow — monorepo-aware test runner
+Usage:
+  npx test-workflow            full pipeline (lint+unit+integration+e2e)
+  npx test-workflow fast       lint + unit only (local / pre-commit)
+  npx test-workflow --root DIR run against DIR (default: cwd)
+Discovers every Python/JS sub-project, runs fail-fast tiers.
+Repo: https://github.com/vanbui-2705/test-workflow`);
+  process.exit(0);
+}
+const MODE = rawArg.replace(/^--mode=/, '');
 const ROOT = process.cwd();
 const EXCLUDE = new Set(['node_modules', '.git', '.venv', 'venv', '__pycache__', '.next', 'dist', 'build', '.codex-tmp', '.superpowers']);
 const TAIL = 40; // cap output lines per tier to avoid giant dumps
