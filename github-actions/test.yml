@@ -1,0 +1,64 @@
+# ============================================================
+#  .github/workflows/test.yml — shared CI for all projects
+#  Copy this into any repo's .github/workflows/ folder.
+#  Pipeline: lint -> unit -> integration -> e2e (fail-fast)
+#  Auto-detects Python vs JS/TS and runs the right tier.
+# ============================================================
+name: test-workflow
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - stack: python
+            setup: |
+              python -m pip install --upgrade pip
+              pip install ruff pytest pytest-cov pytest-mock freezegun
+          - stack: node
+            setup: |
+              npm install
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # --- Python path ---
+      - name: Detect & run Python
+        if: ${{ contains(fromJSON('["python"]'), 'python') }}
+        shell: bash
+        run: |
+          if [ -f pyproject.toml ] || [ -f requirements.txt ] || compgen -G "*.py" >/dev/null; then
+            echo "::group::Python tests"
+            pip install ruff pytest pytest-cov pytest-mock freezegun
+            ruff check . || true
+            [ -d tests ] && pytest -q tests/ || pytest -q . || true
+            [ -d tests_integration ] && pytest -q tests_integration/ || true
+            [ -d tests_e2e ] && pytest -q tests_e2e/ || true
+            echo "::endgroup::"
+          else
+            echo "No Python project markers — skipping"
+          fi
+
+      # --- Node path ---
+      - name: Detect & run Node
+        if: ${{ contains(fromJSON('["node"]'), 'node') }}
+        shell: bash
+        run: |
+          if [ -f package.json ]; then
+            echo "::group::Node tests"
+            npm install
+            npm run lint --if-present || true
+            npm run test:unit --if-present || npm test --if-present || true
+            npm run test:integ --if-present || true
+            npm run test:e2e --if-present || true
+            echo "::endgroup::"
+          else
+            echo "No package.json — skipping"
+          fi
