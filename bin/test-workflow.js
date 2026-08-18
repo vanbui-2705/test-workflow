@@ -5,9 +5,14 @@
 //  (recursively, excluding node_modules/.git/.venv) and runs
 //  a fail-fast pipeline on each: lint -> unit -> integration -> e2e.
 //
+//  Python test env resolution (open, follows project dir):
+//    1. project venv (.venv/venv/env) -> use its pytest
+//    2. uv available                  -> uv run --with pytest pytest
+//    3. global pytest                 -> use it (caller catches crashes)
+//    4. none                          -> warn, skip unit gracefully
+//
 //  Usage:  npx test-workflow            (full, all sub-projects)
 //          npx test-workflow fast       (lint + unit only)
-//          npx test-workflow --root .   (explicit root, default cwd)
 // ============================================================
 'use strict';
 const { execSync } = require('child_process');
@@ -17,15 +22,15 @@ const path = require('path');
 const MODE = (process.argv[2] || 'full').replace(/^--mode=/, '');
 const ROOT = process.cwd();
 const EXCLUDE = new Set(['node_modules', '.git', '.venv', 'venv', '__pycache__', '.next', 'dist', 'build', '.codex-tmp', '.superpowers']);
+const TAIL = 40; // cap output lines per tier to avoid giant dumps
 
 console.log(`🔍 Scanning ${ROOT} for projects (monorepo-aware)...`);
 
-// --- discover sub-projects ---
 function walk(dir, found) {
   let entries = [];
   try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { return; }
-  let isPy = fs.existsSync(path.join(dir, 'pyproject.toml')) || fs.existsSync(path.join(dir, 'requirements.txt'));
-  let isJs = fs.existsSync(path.join(dir, 'package.json'));
+  const isPy = fs.existsSync(path.join(dir, 'pyproject.toml')) || fs.existsSync(path.join(dir, 'requirements.txt'));
+  const isJs = fs.existsSync(path.join(dir, 'package.json'));
   if (isPy || isJs) found.push(dir);
   for (const e of entries) {
     if (!e.isDirectory() || EXCLUDE.has(e.name)) continue;
@@ -34,11 +39,10 @@ function walk(dir, found) {
 }
 const projects = [];
 walk(ROOT, projects);
-// Dedupe + sort by depth (shallow first)
 projects.sort((a, b) => a.split(path.sep).length - b.split(path.sep).length);
 const uniq = [...new Set(projects)];
 console.log(`   Found ${uniq.length} project(s):`);
-uniq.forEach(p => console.log('     • ' + path.relative(ROOT, p) || '   (root)'));
+uniq.forEach(p => console.log('     • ' + (path.relative(ROOT, p) || '(root)')));
 
 if (uniq.length === 0) {
   console.log('⚠ No Python or JS project markers found — nothing to test.');
@@ -54,6 +58,28 @@ function pkgScripts(dir) {
   catch (e) { return {}; }
 }
 
+// Resolve a pytest command for a project (open, follows project dir)
+// Priority: project venv -> uv run -> global pytest -> none
+function resolvePytest(proj) {
+  const cands = [
+    path.join(proj, '.venv', 'Scripts', 'pytest.exe'),
+    path.join(proj, 'venv', 'Scripts', 'pytest.exe'),
+    path.join(proj, 'env', 'Scripts', 'pytest.exe'),
+    path.join(proj, '.venv', 'bin', 'pytest'),
+    path.join(proj, 'venv', 'bin', 'pytest'),
+  ];
+  for (const c of cands) if (fs.existsSync(c)) return `"${c}"`;
+  // uv run installs deps from pyproject/requirements -> prefers project deps
+  // unset VIRTUAL_ENV+PYTHONPATH so uv doesn't inherit the caller's (e.g. Hermes) venv
+  if (fs.existsSync(path.join(proj, 'pyproject.toml'))) {
+    if (hasTool('uv')) return 'env -u VIRTUAL_ENV -u PYTHONPATH uv run --python 3.12 pytest';
+  } else if (fs.existsSync(path.join(proj, 'requirements.txt'))) {
+    if (hasTool('uv')) return 'env -u VIRTUAL_ENV -u PYTHONPATH uv run --python 3.12 --with pytest pytest';
+  }
+  if (hasTool('pytest')) return 'pytest';
+  return null;
+}
+
 let failed = 0;
 for (const proj of uniq) {
   const label = path.relative(ROOT, proj) || '(root)';
@@ -65,38 +91,48 @@ for (const proj of uniq) {
   const hasJs = fs.existsSync(path.join(proj, 'package.json'));
   const scripts = hasJs ? pkgScripts(proj) : {};
 
-  const tier = (name, cmd) => {
+  const runTier = (name, cmd) => {
     console.log(`\n── ▶ ${name} ───────────────────────────────`);
     try {
-      execSync(cmd, { cwd: proj, stdio: 'inherit', shell: true });
+      const out = execSync(cmd, { cwd: proj, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], shell: true, maxBuffer: 20 * 1024 * 1024 });
+      if (out.trim()) process.stdout.write(out);
       console.log(`✅ ${name} passed`);
     } catch (e) {
+      const out = (e.stdout || '') + (e.stderr || '');
+      const lines = out.split('\n').filter(Boolean);
+      if (lines.length) process.stdout.write(lines.slice(-TAIL).join('\n') + '\n');
       console.log(`❌ ${name} FAILED`);
       failed++;
     }
   };
 
   // LINT
-  if (hasPy && hasTool('ruff')) tier('PY lint (ruff)', 'ruff check .');
+  if (hasPy && hasTool('ruff')) runTier('PY lint (ruff)', 'ruff check --output-format concise .');
   else if (hasPy) console.log('⚠ ruff missing — pip install ruff');
-  if (hasJs && scripts.lint) tier('JS lint', `npm run lint --prefix "${proj}"`);
+  if (hasJs && scripts.lint) runTier('JS lint', `npm run lint --prefix "${proj}"`);
 
   // UNIT
-  if (hasPy && hasTool('pytest')) {
-    const tdir = fs.existsSync(path.join(proj, 'tests')) ? 'tests' : '.';
-    tier('PY unit', `pytest -q ${tdir}`);
-  } else if (hasPy) console.log('⚠ pytest missing');
-  if (hasJs && scripts['test:unit']) tier('JS unit', `npm run test:unit --prefix "${proj}"`);
-  else if (hasJs && scripts.test) tier('JS unit', `npm test --prefix "${proj}"`);
+  if (hasPy) {
+    const pytestCmd = resolvePytest(proj);
+    if (pytestCmd) {
+      const tdir = fs.existsSync(path.join(proj, 'tests')) ? 'tests' : '.';
+      runTier('PY unit', `${pytestCmd} -q ${tdir}`);
+    } else {
+      console.log('\n── ▶ PY unit ───────────────────────────────');
+      console.log('⚠ pytest unavailable (no .venv, no uv, no global) — skipping unit');
+    }
+  }
+  if (hasJs && (scripts['test:unit'] || scripts.test)) runTier('JS unit', `npm run ${scripts['test:unit'] ? 'test:unit' : 'test'} --prefix "${proj}" --if-present`);
 
   // INTEGRATION + E2E
   if (MODE !== 'fast') {
-    if (hasPy && fs.existsSync(path.join(proj, 'tests_integration')) && hasTool('pytest'))
-      tier('PY integration', 'pytest -q tests_integration');
-    if (hasJs && scripts['test:integ']) tier('JS integration', `npm run test:integ --prefix "${proj}"`);
-    if (hasPy && fs.existsSync(path.join(proj, 'tests_e2e')) && hasTool('pytest'))
-      tier('PY e2e', 'pytest -q tests_e2e');
-    if (hasJs && scripts['test:e2e']) tier('JS e2e', `npm run test:e2e --prefix "${proj}"`);
+    if (hasPy) {
+      const pytestCmd = resolvePytest(proj);
+      if (fs.existsSync(path.join(proj, 'tests_integration')) && pytestCmd) runTier('PY integration', `${pytestCmd} -q tests_integration`);
+      if (fs.existsSync(path.join(proj, 'tests_e2e')) && pytestCmd) runTier('PY e2e', `${pytestCmd} -q tests_e2e`);
+    }
+    if (hasJs && scripts['test:integ']) runTier('JS integration', `npm run test:integ --prefix "${proj}"`);
+    if (hasJs && scripts['test:e2e']) runTier('JS e2e', `npm run test:e2e --prefix "${proj}"`);
   }
 }
 
