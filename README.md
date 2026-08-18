@@ -1,134 +1,134 @@
-# test-workflow
+# 🧪 test-workflow
 
 [![npm](https://img.shields.io/badge/npm-test--workflow-blue)](https://www.npmjs.com/package/test-workflow)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen.svg)](https://nodejs.org)
+[![Repo](https://img.shields.io/badge/repo-github-black)](https://github.com/vanbui-2705/test-workflow)
 
-A single, language-agnostic test workflow for **all your projects** (Python and/or JS/TS).
-It auto-detects the stack and runs a fail-fast pipeline — `lint → unit → integration → e2e` —
-with **zero per-project configuration**. Run it once via `npx`, wire it into pre-commit and CI,
-and every repo gets the same consistent quality gate.
+**Một workflow test dùng chung cho mọi dự án** (Python và/hoặc JS/TS).
+Tự động nhận diện stack và chạy pipeline fail-fast — `lint → unit → integration → e2e` —
+**không cần cấu hình riêng cho từng dự án**. Gọi 1 lệnh qua `npx`, gắn vào pre-commit và CI,
+và mọi repo đều có chung một cổng chất lượng.
 
-## Why
+## ✨ Tại sao
 
-- One command tests any project — no copy-pasting CI YAML into every repo.
-- Monorepo-aware: recursively discovers every Python/JS sub-project and tests each in isolation.
-- Fail-fast: a red tier stops the run immediately (exit 1) so you fix the first break, not the fifth.
-- Local == CI: identical commands and order, so "works on my machine" stops being a lie.
-- Respects your environment: prefers the project's own venv, otherwise an isolated `uv run`,
-  and never edits source under test.
+- **Một lệnh test mọi dự án** — không copy-paste CI YAML vào từng repo.
+- **Monorepo-aware** — quét đệ quy mọi sub-project Python/JS và test từng cái riêng biệt.
+- **Fail-fast** — tier đỏ dừng chạy ngay (exit 1) để anh sửa lỗi đầu tiên, không phải lỗi thứ năm.
+- **Local == CI** — cùng lệnh, cùng thứ tự, nên "chạy trên máy tôi" hết là nói dối.
+- **Tôn trọng môi trường** — ưu tiên venv của dự án, không có thì `uv run` cô lập, và **không bao giờ sửa code đang test**.
 
-## Features
+## 🎯 Tính năng
 
-- 🔍 **Auto stack detection** — Python (`pyproject.toml` / `requirements.txt` / `*.py`),
-  JS/TS (`package.json`), or both in the same tree.
-- 🏗️ **Monorepo-aware** — scans recursively (excludes `node_modules`, `.git`, `.venv`, `.next`, …).
-- ⚡ **Fail-fast pipeline** — `lint → unit → integration → e2e`, stops at first failure.
-- 🐍 **Python env resolution (open, follows your project dir):**
-  1. project venv (`.venv` / `venv` / `env`) → its `pytest`
-  2. `uv` available → `uv run --python 3.12 pytest` (isolated, installs deps from `pyproject.toml`)
-  3. global `pytest` → used as-is
-  4. none → warns and skips unit gracefully
-- 🧹 **Concise output** — `ruff --output-format concise`, per-tier logs capped to the last 40 lines.
-- 🪟 **Cross-platform** — Node CLI runs on Windows / macOS / Linux (no `make` required).
+- 🔍 **Auto-detect stack** — Python (`pyproject.toml` / `requirements.txt` / `*.py`),
+  JS/TS (`package.json`), hoặc cả hai trong cùng một cây thư mục.
+- 🏗️ **Monorepo-aware** — quét đệ quy (loại trừ `node_modules`, `.git`, `.venv`, `.next`, …).
+- ⚡ **Pipeline fail-fast** — `lint → unit → integration → e2e`, dừng ngay khi gặp lỗi.
+- 🐍 **Python env resolution (mở, theo thư mục dự án):**
+  1. venv dự án (`.venv` / `venv` / `env`) → dùng `pytest` của nó
+  2. có `uv` → `uv run --python 3.12 pytest` (cô lập, tự cài dep từ `pyproject.toml`)
+  3. `pytest` global → dùng luôn
+  4. không có → cảnh báo và skip unit một cách graceful
+- 🧹 **Output gọn** — `ruff --output-format concise`, mỗi tier chỉ in 40 dòng cuối.
+- 🪟 **Cross-platform** — CLI Node chạy trên Windows / macOS / Linux (không cần `make`).
 
-## Install
+## 📦 Cài đặt
 
 ```bash
-# Run without installing (needs network + the repo on npm/GitHub)
+# Chạy không cần cài (cần network + package trên npm/GitHub)
 npx test-workflow
 
-# Or install globally for a `test-workflow` command everywhere
+# Hoặc cài global để có lệnh `test-workflow` ở mọi nơi
 npm i -g test-workflow
 
-# Or clone the source (gets run-tests.sh, pre-commit, and the GitHub Action)
+# Hoặc clone source (có sẵn run-tests.sh, pre-commit, GitHub Action)
 git clone https://github.com/vanbui-2705/test-workflow ~/test-workflow
 ```
 
-> The `npx`/`npm` entry point is `bin/test-workflow.js` — a pure Node CLI, cross-platform.
+> Entry point `npx`/`npm` là `bin/test-workflow.js` — CLI Node thuần, cross-platform.
 
-## Usage
+## 🚀 Sử dụng
 
-From inside any project directory:
+Đứng trong thư mục dự án:
 
 ```bash
 cd path/to/your-project
 
-test-workflow fast     # lint + unit only (local / pre-commit)
+test-workflow fast     # chỉ lint + unit (local / pre-commit)
 test-workflow          # full: lint + unit + integration + e2e
 
-# or, using the bundled shell runner (no npm needed):
+# hoặc dùng shell runner đi kèm (không cần npm):
 bash ~/test-workflow/run-tests.sh fast
 bash ~/test-workflow/run-tests.sh
 ```
 
-Get help:
+Xem trợ giúp:
 
 ```bash
 test-workflow --help
 ```
 
-### Wire it into a project (recommended for long-lived repos)
+### Gắn vào dự án (khuyên dùng cho repo lâu dài)
 
 ```bash
 cd path/to/your-project
 
-# 1) Runner, living inside the project
+# 1) Runner, nằm trong dự án
 cp ~/test-workflow/run-tests.sh ./run-tests.sh && chmod +x ./run-tests.sh
 
-# 2) Pre-commit hook — runs the fast tier before every commit
+# 2) Pre-commit hook — chạy tier nhanh trước mỗi commit
 cp ~/test-workflow/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
 
-# 3) CI — runs the full pipeline on GitHub Actions
+# 3) CI — chạy full pipeline trên GitHub Actions
 mkdir -p .github/workflows
 cp ~/test-workflow/github-actions/test.yml .github/workflows/test.yml
 ```
 
-Then:
+Sau đó:
 
 ```bash
-./run-tests.sh fast   # local, fast
-git commit -m "..."   # fast tier runs automatically
-git push              # GitHub Actions runs the full pipeline
+./run-tests.sh fast   # local nhanh
+git commit -m "..."   # tier nhanh tự chạy
+git push              # GitHub Actions chạy full pipeline
 ```
 
-## How it works
+## ⚙️ Pipeline hoạt động thế nào
 
 ```
 lint → unit → integration → e2e
  │      │        │             │
- │      │        │             └ E2E: critical paths only (few, slow)
- │      │        └ INTEGRATION: modules wired together, externals mocked
- │      └ UNIT: single functions, isolated, fully mocked (many, fast)
- └ LINT: ruff (py) / eslint (js) — static, instant
+ │      │        │             └ E2E: luồng chính (ít, chậm)
+ │      │        └ INTEGRATION: ghép module, mock external
+ │      └ UNIT: hàm đơn lẻ, cô lập, mock hết (nhiều, nhanh)
+ └ LINT: ruff (py) / eslint (js) — tĩnh, tức thì
 ```
 
-A failing tier stops the run immediately (exit 1) and prints `❌`. Later tiers do not run.
+Tier lỗi → dừng ngay (exit 1) và in `❌`. Các tier sau không chạy.
 
-| Mode   | Tiers                              | Use for            |
-|--------|------------------------------------|--------------------|
-| `fast` | `lint` + `unit`                    | local / pre-commit |
-| (full) | `lint` + `unit` + `integration` + `e2e` | CI          |
+| Mode   | Tiers                              | Dùng cho             |
+|--------|------------------------------------|---------------------|
+| `fast` | `lint` + `unit`                    | local / pre-commit  |
+| (full) | `lint` + `unit` + `integration` + `e2e` | CI           |
 
-## Auto-detection
+## 🔧 Auto-detect
 
-| Marker in the project                          | Workflow runs        |
+| Dấu hiệu trong dự án                          | Workflow chạy        |
 |------------------------------------------------|----------------------|
 | `pyproject.toml` / `requirements.txt` / `*.py` | Python tier          |
 | `package.json`                                  | JS/TS tier           |
-| both                                           | both stacks          |
-| none                                           | `⚠ No markers` → skip (exit 0) |
+| cả hai                                          | cả hai stack         |
+| không có gì                                      | `⚠ No markers` → skip (exit 0) |
 
-## Project layout conventions
+## 📁 Quy ước thư mục test
 
 ```
 your-project/
 ├── run-tests.sh
 ├── .github/workflows/test.yml
-├── src/ (or *.py / *.ts)
-├── tests/              # UNIT tests (recommended)
-├── tests_integration/  # INTEGRATION (optional)
-└── tests_e2e/          # E2E (optional)
+├── src/ (hoặc *.py / *.ts)
+├── tests/              # UNIT tests (khuyên dùng)
+├── tests_integration/  # INTEGRATION (tùy chọn)
+└── tests_e2e/          # E2E (tùy chọn)
 ```
 
 **Python** — `tests/test_example.py`:
@@ -138,7 +138,7 @@ def test_add():
     assert 1 + 1 == 2
 ```
 
-**JS/TS** — add scripts to `package.json`:
+**JS/TS** — thêm script vào `package.json`:
 
 ```json
 {
@@ -151,25 +151,25 @@ def test_add():
 }
 ```
 
-If a project has no tests yet, the workflow still runs lint and reports "no tests found" — it does not fail.
+Nếu dự án chưa có test, workflow vẫn chạy lint và báo "no tests found" — không fail.
 
-## Environment requirements (one-time)
+## 🧰 Yêu cầu môi trường (1 lần)
 
 ```bash
 # Python tooling
 pip install ruff pytest
 
-# JS/TS tooling (per project)
-npm install   # provides eslint / vitest / playwright per package.json
+# JS/TS tooling (theo dự án)
+npm install   # cung cấp eslint / vitest / playwright theo package.json
 ```
 
-`uv` is optional but recommended — when present, the workflow uses it to run an isolated,
-dependency-correct test environment instead of the global interpreter.
+`uv` tùy chọn nhưng khuyên dùng — khi có, workflow dùng nó chạy môi trường test cô lập,
+đúng dependency thay vì interpreter global.
 
-On Windows/MSYS, `make` is not installed by default; use `run-tests.sh` (no `make` needed).
-On Linux/CI, `make` is available and the bundled `Makefile` can drive the same commands.
+Trên Windows/MSYS, `make` chưa có sẵn → dùng `run-tests.sh` (không cần make).
+Trên Linux/CI, `make` có sẵn và `Makefile` đi kèm chạy cùng lệnh.
 
-## Design principles
+## 📜 Nguyên lý thiết kế
 
 ```
 SYSTEM: You are a Shared Test Workflow runner.
@@ -185,16 +185,16 @@ RULES:
 OUTPUT: ✅ per tier, 🎉 on success, ❌ + exit 1 on failure.
 ```
 
-## Troubleshooting
+## 🆘 Troubleshooting
 
-| Symptom                          | Cause                    | Fix                              |
-|----------------------------------|--------------------------|----------------------------------|
-| `⚠ ruff missing`                 | ruff not installed       | `pip install ruff`               |
-| `⚠ pytest unavailable … skipping`| no venv/uv/global pytest  | `pip install pytest` or install `uv` |
-| `No Python or JS markers`        | wrong directory          | `cd` into the project            |
-| exit 1 at lint                   | style/import issue       | fix per ruff/eslint hint         |
-| red CI, green local              | missing dep on CI        | add install step in `test.yml`   |
+| Hiện tượng                          | Nguyên nhân              | Xử lý                     |
+|----------------------------------|--------------------------|---------------------------|
+| `⚠ ruff missing`                 | chưa cài ruff            | `pip install ruff`        |
+| `⚠ pytest unavailable … skipping`| không có venv/uv/pytest  | `pip install pytest` hoặc cài `uv` |
+| `No Python or JS markers`        | đứng sai thư mục         | `cd` vào dự án            |
+| exit 1 ở lint                    | sai style/import        | sửa theo gợi ý ruff/eslint|
+| CI đỏ, local xanh                | thiếu dep trên CI       | thêm bước cài trong `test.yml` |
 
-## License
+## 📄 License
 
 MIT © vanbui-2705 — https://github.com/vanbui-2705/test-workflow
