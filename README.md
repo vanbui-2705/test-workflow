@@ -1,142 +1,145 @@
-# 🧪 Hermes Shared Test Workflow — Hướng dẫn chi tiết (TOÀN TẬP)
+# test-workflow
 
-Bộ khung test **dùng chung cho MỌI dự án** (Python & JS/TS).
-Thiết kế theo 10 nguyên lý: nhiều unit cô lập, ít E2E, fail-fast,
-chạy giống nhau ở local lẫn CI.
+[![npm](https://img.shields.io/badge/npm-test--workflow-blue)](https://www.npmjs.com/package/test-workflow)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen.svg)](https://nodejs.org)
 
----
+A single, language-agnostic test workflow for **all your projects** (Python and/or JS/TS).
+It auto-detects the stack and runs a fail-fast pipeline — `lint → unit → integration → e2e` —
+with **zero per-project configuration**. Run it once via `npx`, wire it into pre-commit and CI,
+and every repo gets the same consistent quality gate.
 
-## 📁 1. Mọi thứ để ở đâu?
+## Why
 
-### Bộ khung workflow (CHỈ 1 bản duy nhất — không copy vào từng dự án)
-```
-~/test-workflow/
-├── run-tests.sh          ← entry point chính (dùng mọi lúc)
-├── Makefile              ← tiện ích cho máy có `make` (Linux/CI)
-├── pre-commit            ← hook local (lint+unit nhanh)
-├── github-actions/
-│   └── test.yml          ← CI tự động (GitHub Actions)
-└── README.md             ← file này
-```
+- One command tests any project — no copy-pasting CI YAML into every repo.
+- Monorepo-aware: recursively discovers every Python/JS sub-project and tests each in isolation.
+- Fail-fast: a red tier stops the run immediately (exit 1) so you fix the first break, not the fifth.
+- Local == CI: identical commands and order, so "works on my machine" stops being a lie.
+- Respects your environment: prefers the project's own venv, otherwise an isolated `uv run`,
+  and never edits source under test.
 
-### Dự án của bạn để ở đâu?
-Để dự án vào **1 trong các thư mục gốc** (đã có sẵn trên máy anh):
-```
-~/source/repos/<tên-dự-án>/     ← khuyên dùng (đã có ~/source/repos)
-~/.openclaw/workspace/<tên>/     ← workspace OpenClaw (đã có sẵn)
-~/dev/<tên>/                     ← tuỳ chọn
-```
-> Quy tắc: mỗi dự án = 1 thư mục riêng, có file marker để workflow nhận diện:
-> - Python → có `pyproject.toml` HOẶC `requirements.txt` HOẶC ít nhất 1 file `*.py`
-> - JS/TS  → có `package.json`
+## Features
 
-Ví dụ:
-```
-~/source/repos/my-bot/         (Python)
-~/source/repos/web-app/        (JS/TS)
-~/.openclaw/workspace/rss/      (Python+JS mixed)
-```
+- 🔍 **Auto stack detection** — Python (`pyproject.toml` / `requirements.txt` / `*.py`),
+  JS/TS (`package.json`), or both in the same tree.
+- 🏗️ **Monorepo-aware** — scans recursively (excludes `node_modules`, `.git`, `.venv`, `.next`, …).
+- ⚡ **Fail-fast pipeline** — `lint → unit → integration → e2e`, stops at first failure.
+- 🐍 **Python env resolution (open, follows your project dir):**
+  1. project venv (`.venv` / `venv` / `env`) → its `pytest`
+  2. `uv` available → `uv run --python 3.12 pytest` (isolated, installs deps from `pyproject.toml`)
+  3. global `pytest` → used as-is
+  4. none → warns and skips unit gracefully
+- 🧹 **Concise output** — `ruff --output-format concise`, per-tier logs capped to the last 40 lines.
+- 🪟 **Cross-platform** — Node CLI runs on Windows / macOS / Linux (no `make` required).
 
----
-
-## 🌐 0. Cài đặt workflow (chỉ 1 lần)
-
-Workflow được publish lên npm — user chỉ cần 1 lệnh là xài được trên mọi dự án:
+## Install
 
 ```bash
-npx test-workflow                 # chạy full pipeline (không cần cài)
-# hoặc cài global để dùng lệnh `test-workflow` ở mọi nơi:
+# Run without installing (needs network + the repo on npm/GitHub)
+npx test-workflow
+
+# Or install globally for a `test-workflow` command everywhere
 npm i -g test-workflow
-test-workflow fast                # sau khi cài global
-```
 
-Hoặc clone repo về máy (để có cả `run-tests.sh`, `pre-commit`, CI):
-```bash
+# Or clone the source (gets run-tests.sh, pre-commit, and the GitHub Action)
 git clone https://github.com/vanbui-2705/test-workflow ~/test-workflow
 ```
 
-> `npx test-workflow` = CLI Node cross-platform (bin/test-workflow.js) — chạy được
-> trên Windows/macOS/Linux miễn có Node. Không cần `make`.
+> The `npx`/`npm` entry point is `bin/test-workflow.js` — a pure Node CLI, cross-platform.
 
-## 🚀 2. Vào mỗi dự án, tôi phải làm gì?
+## Usage
 
-Có 3 cấp độ — từ nhẹ đến đầy đủ. Anh chọn tùy nhu cầu.
+From inside any project directory:
 
-### Cấp độ A — CHỈ CHẠY TEST (nhanh nhất, không cài gì)
-Đứng ở thư mục dự án, gọi workflow từ xa bằng `npx`:
 ```bash
-cd ~/source/repos/my-bot
-npx test-workflow fast      # lint + unit
-npx test-workflow           # full: lint+unit+integ+e2e
-```
-Hoặc nếu đã clone repo local:
-```bash
+cd path/to/your-project
+
+test-workflow fast     # lint + unit only (local / pre-commit)
+test-workflow          # full: lint + unit + integration + e2e
+
+# or, using the bundled shell runner (no npm needed):
 bash ~/test-workflow/run-tests.sh fast
 bash ~/test-workflow/run-tests.sh
 ```
-Không cần copy file vào dự án. Đứng ở thư mục dự án, gọi workflow từ xa:
+
+Get help:
 
 ```bash
-cd ~/source/repos/my-bot
-bash ~/test-workflow/run-tests.sh fast      # lint + unit
-bash ~/test-workflow/run-tests.sh           # full: lint+unit+integ+e2e
+test-workflow --help
 ```
 
-✅ Xong. Workflow auto-detect Py/JS, chạy đúng tier. Không sửa project.
-
----
-
-### Cấp độ B — GẮN VÀO DỰ ÁN (khuyên dùng cho dự án lâu dài)
-Copy 3 file vào dự án để nó "có test riêng":
+### Wire it into a project (recommended for long-lived repos)
 
 ```bash
-cd ~/source/repos/my-bot
+cd path/to/your-project
 
-# 1) Runner (đứng tên dự án)
-cp ~/test-workflow/run-tests.sh ./run-tests.sh
-chmod +x ./run-tests.sh
+# 1) Runner, living inside the project
+cp ~/test-workflow/run-tests.sh ./run-tests.sh && chmod +x ./run-tests.sh
 
-# 2) Pre-commit hook (chạy nhanh mỗi lần git commit)
-mkdir -p .git/hooks
-cp ~/test-workflow/pre-commit .git/hooks/pre-commit
-chmod +x .git/hooks/pre-commit
+# 2) Pre-commit hook — runs the fast tier before every commit
+cp ~/test-workflow/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
 
-# 3) CI (tự chạy trên GitHub khi push/PR)
+# 3) CI — runs the full pipeline on GitHub Actions
 mkdir -p .github/workflows
 cp ~/test-workflow/github-actions/test.yml .github/workflows/test.yml
 ```
 
-Sau đó trong dự án anh có thể chạy ngắn gọn:
+Then:
+
 ```bash
-./run-tests.sh fast     # local nhanh
-./run-tests.sh          # local full
-git commit -m "..."     # tự động chạy lint+unit trước khi commit
-git push                # GitHub Actions tự chạy toàn bộ pipeline
+./run-tests.sh fast   # local, fast
+git commit -m "..."   # fast tier runs automatically
+git push              # GitHub Actions runs the full pipeline
 ```
 
----
+## How it works
 
-### Cấp độ C — DỰ ÁN CÓ TEST THỰC TẾ (để pipeline có gì chạy)
-Workflow cần thư mục test theo quy ước:
 ```
-my-bot/
+lint → unit → integration → e2e
+ │      │        │             │
+ │      │        │             └ E2E: critical paths only (few, slow)
+ │      │        └ INTEGRATION: modules wired together, externals mocked
+ │      └ UNIT: single functions, isolated, fully mocked (many, fast)
+ └ LINT: ruff (py) / eslint (js) — static, instant
+```
+
+A failing tier stops the run immediately (exit 1) and prints `❌`. Later tiers do not run.
+
+| Mode   | Tiers                              | Use for            |
+|--------|------------------------------------|--------------------|
+| `fast` | `lint` + `unit`                    | local / pre-commit |
+| (full) | `lint` + `unit` + `integration` + `e2e` | CI          |
+
+## Auto-detection
+
+| Marker in the project                          | Workflow runs        |
+|------------------------------------------------|----------------------|
+| `pyproject.toml` / `requirements.txt` / `*.py` | Python tier          |
+| `package.json`                                  | JS/TS tier           |
+| both                                           | both stacks          |
+| none                                           | `⚠ No markers` → skip (exit 0) |
+
+## Project layout conventions
+
+```
+your-project/
 ├── run-tests.sh
 ├── .github/workflows/test.yml
-├── src/ hoặc *.py / *.ts
-├── tests/              ← UNIT tests (bắt buộc để có ý nghĩa)
-├── tests_integration/  ← INTEGRATION (tùy chọn)
-└── tests_e2e/          ← E2E (tùy chọn)
+├── src/ (or *.py / *.ts)
+├── tests/              # UNIT tests (recommended)
+├── tests_integration/  # INTEGRATION (optional)
+└── tests_e2e/          # E2E (optional)
 ```
 
-**Python** — ví dụ `tests/test_rss.py`:
+**Python** — `tests/test_example.py`:
+
 ```python
-import iran_rss_monitor as m
-
-def test_is_iran_war():
-    assert m.is_iran_war({"title":"Iran không kích","description":"tên lửa"}) is True
+def test_add():
+    assert 1 + 1 == 2
 ```
 
-**JS/TS** — thêm script vào `package.json`:
+**JS/TS** — add scripts to `package.json`:
+
 ```json
 {
   "scripts": {
@@ -148,95 +151,50 @@ def test_is_iran_war():
 }
 ```
 
-> Nếu chưa có test nào, workflow vẫn chạy (lint + "⚠ no tests found") — không lỗi.
+If a project has no tests yet, the workflow still runs lint and reports "no tests found" — it does not fail.
 
----
+## Environment requirements (one-time)
 
-## 🔁 3. Pipeline chạy như thế nào (fail-fast)
-
-```
-lint → unit → integration → e2e
- ^       ^        ^             ^
- |       |        |             └ E2E: luồng chính (ít, chậm)
- |       |        └ INTEGRATION: ghép module, mock external (Telegram/RSS)
- |       └ UNIT: hàm đơn lẻ, cô lập, mock hết (nhiều, nhanh)
- └ LINT: ruff (py) / eslint (js) — tĩnh, tức thì
-```
-**Lớp nào lỗi → dừng ngay, exit 1, in ❌.** Không chạy lớp sau.
-
-- `fast` = chỉ chạy `lint + unit` (dành cho local / pre-commit)
-- `full` = chạy cả 4 lớp (dành cho CI)
-
----
-
-## 🧩 4. Auto-detect stack (không cần config)
-
-| Dấu hiệu trong dự án | Workflow chạy |
-|----------------------|---------------|
-| `pyproject.toml` / `requirements.txt` / `*.py` | Python tier |
-| `package.json` | JS/TS tier |
-| Cả 2 | Chạy cả 2 stacks |
-| Không có gì | "⚠ No markers" → skip, exit 0 |
-
----
-
-## 🔧 5. Yêu cầu môi trường (1 lần duy nhất)
-
-Chỉ cần cài 1 lần trên máy (CI đã có sẵn):
 ```bash
-# Python
-pip install ruff pytest pytest-cov pytest-mock freezegun
+# Python tooling
+pip install ruff pytest
 
-# JS/TS
-npm install   # + eslint, vitest, playwright theo dự án
+# JS/TS tooling (per project)
+npm install   # provides eslint / vitest / playwright per package.json
 ```
-Windows/MSYS: `make` chưa có sẵn → dùng `run-tests.sh` (không cần make).
-Trên Linux/CI: `make` có sẵn → có thể dùng `make -f ~/test-workflow/Makefile test-fast`.
 
----
+`uv` is optional but recommended — when present, the workflow uses it to run an isolated,
+dependency-correct test environment instead of the global interpreter.
 
-## 📋 6. Cheat-sheet lệnh
+On Windows/MSYS, `make` is not installed by default; use `run-tests.sh` (no `make` needed).
+On Linux/CI, `make` is available and the bundled `Makefile` can drive the same commands.
 
-| Muốn làm | Lệnh |
-|----------|------|
-| Test nhanh 1 dự án (đứng trong dự án) | `bash ~/test-workflow/run-tests.sh fast` |
-| Test đầy đủ 1 dự án | `bash ~/test-workflow/run-tests.sh` |
-| Gắn hook vào dự án | copy `run-tests.sh` + `pre-commit` + `test.yml` (mục 2) |
-| Xem bot/lint báo lỗi gì | chạy `fast`, đọc output ruff/eslint |
-| CI tự chạy | `git push` (đã copy `test.yml`) |
-
----
-
-## ✅ 7. Triết lý (system prompt của workflow)
+## Design principles
 
 ```
 SYSTEM: You are a Shared Test Workflow runner.
-ROLE: Verify any Python or JS/TS project with one command, zero per-project config.
+ROLE:   Verify any Python or JS/TS project with one command, zero per-project config.
 PIPELINE (fail-fast): lint → unit → integration → e2e
-DETECT: py if pyproject/requirements/*.py; js if package.json; both = run both; none = skip.
+DETECT:  py if pyproject/requirements/*.py; js if package.json; both → run both; none → skip.
 RULES:
   1. Never edit source under test — only verify.
   2. Fail-fast: any tier non-zero → exit 1, stop.
-  3. Deterministic: caller mocks externals (network/time).
+  3. Deterministic: callers mock externals (network/time).
   4. Idempotent: re-run = same result.
   5. Local == CI: same commands, same order.
 OUTPUT: ✅ per tier, 🎉 on success, ❌ + exit 1 on failure.
 ```
 
----
+## Troubleshooting
 
-## 🆘 8. Troubleshooting
+| Symptom                          | Cause                    | Fix                              |
+|----------------------------------|--------------------------|----------------------------------|
+| `⚠ ruff missing`                 | ruff not installed       | `pip install ruff`               |
+| `⚠ pytest unavailable … skipping`| no venv/uv/global pytest  | `pip install pytest` or install `uv` |
+| `No Python or JS markers`        | wrong directory          | `cd` into the project            |
+| exit 1 at lint                   | style/import issue       | fix per ruff/eslint hint         |
+| red CI, green local              | missing dep on CI        | add install step in `test.yml`   |
 
-| Hiện tượng | Nguyên nhân | Xử lý |
-|-----------|------------|-------|
-| "⚠ ruff missing" | chưa cài ruff | `pip install ruff` |
-| "⚠ no pytest tests found" | chưa viết test | tạo `tests/` (mục 2C) |
-| "No Python or JS markers" | đứng sai thư mục | `cd` vào đúng dự án |
-| Exit 1 ở lint | code sai style/import | sửa theo gợi ý ruff/eslint |
-| CI đỏ mà local xanh | thiếu dep trên CI | thêm vào `test.yml` setup bước cài |
+## License
 
----
-
-📌 **Tóm lại:** Dự án để trong `~/source/repos/` (hoặc `workspace`).
-Vào dự án → `bash ~/test-workflow/run-tests.sh fast`.
-Muốn tự động → copy 3 file (mục 2B). Xong.
+MIT © vanbui-2705 — https://github.com/vanbui-2705/test-workflow
