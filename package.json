@@ -1,5 +1,5 @@
 {
-  "name": "@vanbui-2705/test-workflow",
+  "name": "@vanbv/test-workflow",
   "version": "1.0.0",
   "description": "Shared test workflow for Python + JS/TS projects — auto-detect stack, fail-fast pipeline (lint → unit → integration → e2e).",
   "bin": {
