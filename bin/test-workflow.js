@@ -40,7 +40,8 @@ console.log(`🔍 Scanning ${ROOT} for projects (monorepo-aware)...`);
 function walk(dir, found) {
   let entries = [];
   try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { return; }
-  const isPy = fs.existsSync(path.join(dir, 'pyproject.toml')) || fs.existsSync(path.join(dir, 'requirements.txt'));
+  const hasPyFile = entries.some(e => e.isFile() && e.name.endsWith('.py'));
+  const isPy = fs.existsSync(path.join(dir, 'pyproject.toml')) || fs.existsSync(path.join(dir, 'requirements.txt')) || hasPyFile;
   const isJs = fs.existsSync(path.join(dir, 'package.json'));
   if (isPy || isJs) found.push(dir);
   for (const e of entries) {
@@ -69,6 +70,20 @@ function pkgScripts(dir) {
   catch (e) { return {}; }
 }
 
+// Read the requested Python version from pyproject.toml (requires-python),
+// defaulting to 3.12. Returns e.g. "3.12" or "3.11".
+function pyVersion(proj) {
+  const pp = path.join(proj, 'pyproject.toml');
+  if (fs.existsSync(pp)) {
+    try {
+      const txt = fs.readFileSync(pp, 'utf8');
+      const m = txt.match(/requires-python\s*=\s*["']>=?\s*(\d+\.\d+)/);
+      if (m) return m[1];
+    } catch (e) { /* ignore */ }
+  }
+  return '3.12';
+}
+
 // Resolve a pytest command for a project (open, follows project dir)
 // Priority: project venv -> uv run -> global pytest -> none
 function resolvePytest(proj) {
@@ -82,10 +97,11 @@ function resolvePytest(proj) {
   for (const c of cands) if (fs.existsSync(c)) return `"${c}"`;
   // uv run installs deps from pyproject/requirements -> prefers project deps
   // unset VIRTUAL_ENV+PYTHONPATH so uv doesn't inherit the caller's (e.g. Hermes) venv
+  const pv = pyVersion(proj);
   if (fs.existsSync(path.join(proj, 'pyproject.toml'))) {
-    if (hasTool('uv')) return 'env -u VIRTUAL_ENV -u PYTHONPATH uv run --python 3.12 pytest';
+    if (hasTool('uv')) return `env -u VIRTUAL_ENV -u PYTHONPATH uv run --python ${pv} pytest`;
   } else if (fs.existsSync(path.join(proj, 'requirements.txt'))) {
-    if (hasTool('uv')) return 'env -u VIRTUAL_ENV -u PYTHONPATH uv run --python 3.12 --with pytest pytest';
+    if (hasTool('uv')) return `env -u VIRTUAL_ENV -u PYTHONPATH uv run --python ${pv} --with pytest pytest`;
   }
   if (hasTool('pytest')) return 'pytest';
   return null;

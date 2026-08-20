@@ -21,7 +21,7 @@ EXCLUDE='node_modules|.git|.venv|venv|__pycache__|.next|dist|build|.codex-tmp|.s
 TAIL=40
 echo "🔍 Scanning $ROOT for projects (monorepo-aware)..."
 
-mapfile -t PROJS < <(find "$ROOT" -type f \( -name pyproject.toml -o -name requirements.txt -o -name package.json \) 2>/dev/null \
+mapfile -t PROJS < <(find "$ROOT" -type f \( -name pyproject.toml -o -name requirements.txt -o -name package.json -o -name "*.py" \) 2>/dev/null \
   | grep -vE "/($EXCLUDE)/" | xargs -n1 dirname 2>/dev/null | sort -u)
 
 if [ "${#PROJS[@]}" -eq 0 ]; then
@@ -33,6 +33,7 @@ printf '     • %s\n' "${PROJS[@]}"
 
 # Resolve pytest command for a project dir ($1). Echoes command or empty.
 # Priority: project venv -> uv run (with deps) -> global pytest -> none
+# Reads requires-python from pyproject.toml (default 3.12) so uv uses the right interpreter.
 resolve_pytest() {
   local p="$1"
   for v in .venv venv env; do
@@ -40,10 +41,15 @@ resolve_pytest() {
       [ -x "$exe" ] && { echo "$exe"; return; }
     done
   done
+  local pv="3.12"
   if [ -f "$p/pyproject.toml" ]; then
-    command -v uv >/dev/null 2>&1 && { echo "env -u VIRTUAL_ENV -u PYTHONPATH uv run --python 3.12 pytest"; return; }
+    local rp; rp=$(grep -oE 'requires-python[^=]*=[^"]*"[^"]*([0-9]+\.[0-9]+)' "$p/pyproject.toml" 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -1)
+    [ -n "$rp" ] && pv="$rp"
+  fi
+  if [ -f "$p/pyproject.toml" ]; then
+    command -v uv >/dev/null 2>&1 && { echo "env -u VIRTUAL_ENV -u PYTHONPATH uv run --python $pv pytest"; return; }
   elif [ -f "$p/requirements.txt" ]; then
-    command -v uv >/dev/null 2>&1 && { echo "env -u VIRTUAL_ENV -u PYTHONPATH uv run --python 3.12 --with pytest pytest"; return; }
+    command -v uv >/dev/null 2>&1 && { echo "env -u VIRTUAL_ENV -u PYTHONPATH uv run --python $pv --with pytest pytest"; return; }
   fi
   command -v pytest >/dev/null 2>&1 && { echo "pytest"; return; }
   echo ""
@@ -93,8 +99,12 @@ for proj in "${PROJS[@]}"; do
       echo "⚠ pytest unavailable (no .venv, no uv, no global) — skipping unit"
     fi
   fi
-  if [ "$IS_JS" = yes ] && grep -q '"test:unit"\|"test"' "$proj/package.json" 2>/dev/null; then
-    tier "JS unit" bash -c "cd '$proj' && npm run test:unit --if-present"
+  if [ "$IS_JS" = yes ]; then
+    if grep -q '"test:unit"' "$proj/package.json" 2>/dev/null; then
+      tier "JS unit" bash -c "cd '$proj' && npm run test:unit"
+    elif grep -q '"test"' "$proj/package.json" 2>/dev/null; then
+      tier "JS unit" bash -c "cd '$proj' && npm test"
+    fi
   fi
 
   # INTEGRATION + E2E

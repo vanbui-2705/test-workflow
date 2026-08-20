@@ -2,10 +2,20 @@
 # ============================================================
 #  pre-commit hook (local) — monorepo-aware, fast tier only
 #  Install: copy to <project>/.git/hooks/pre-commit && chmod +x
-#  Runs lint + unit on every discovered py/js sub-project.
+#  Prefers `npx test-workflow` (npm install) and falls back to a
+#  cloned ~/test-workflow checkout so it works either way.
 # ============================================================
 set -uo pipefail
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 echo "⚡ pre-commit: running fast test tier (monorepo-aware)..."
-bash "$HOME/test-workflow/run-tests.sh" fast
+
+if command -v npx >/dev/null 2>&1; then
+  # npx resolves @vanbv/test-workflow if installed, else fetches from the registry
+  npx --yes @vanbv/test-workflow fast
+elif [ -f "$HOME/test-workflow/run-tests.sh" ]; then
+  bash "$HOME/test-workflow/run-tests.sh" fast
+else
+  echo "⚠ test-workflow not found (install via 'npm i -g @vanbv/test-workflow' or clone ~/test-workflow)"
+  exit 1
+fi
